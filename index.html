@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semi Tracker — Semiconductor Market Dashboard</title>
+<style>
+  :root {
+    --bg-primary: #080808;
+    --bg-secondary: #111111;
+    --bg-card: #141414;
+    --bg-hover: #1c1c1c;
+    --border: #222222;
+    --border-bright: #2a2a2a;
+    --text-primary: #f0f0f0;
+    --text-secondary: #888888;
+    --text-muted: #555555;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.12);
+    --cyan-glow: rgba(0,212,255,0.25);
+    --purple: #a855f7;
+    --purple-dim: rgba(168,85,247,0.12);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.12);
+    --radius: 10px;
+    --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,8,8,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .logo span { color: var(--cyan); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .header-date {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .header-last-updated {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .company-card.data-error { opacity: 0.42; }
+  .company-card.data-error .price-display,
+  .company-card.data-error .price-change { color: var(--text-muted) !important; }
+
+  /* ── Main Layout ── */
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .hero h1 span { color: var(--cyan); }
+
+  .hero p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-color var(--transition), background var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent, var(--cyan));
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+
+  .stat-card:hover { border-color: var(--border-bright); background: var(--bg-hover); }
+  .stat-card:hover::before { opacity: 1; }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  .stat-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-top: 6px;
+  }
+
+  .stat-change.up { color: var(--green); background: var(--green-dim); }
+  .stat-change.down { color: var(--red); background: var(--red-dim); }
+
+  /* ── Section Header ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 14px;
+    background: var(--cyan);
+    border-radius: 2px;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .filter-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .filter-btn:hover,
+  .filter-btn.active {
+    background: var(--cyan-dim);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* ── Company Grid ── */
+  .company-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+
+  .company-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .company-card:hover {
+    border-color: var(--border-bright);
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .company-card.hidden { display: none; }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .company-info { flex: 1; }
+
+  .ticker-badge {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+
+  .company-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  .sector-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .card-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .price-display {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s ease;
+  }
+
+  .price-change {
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s ease;
+  }
+
+  .price-change.up { color: var(--green); }
+  .price-change.down { color: var(--red); }
+
+  .flash-up { animation: flashGreen 0.6s ease; }
+  .flash-down { animation: flashRed 0.6s ease; }
+
+  @keyframes flashGreen {
+    0% { color: var(--green); }
+    100% { color: var(--text-primary); }
+  }
+
+  @keyframes flashRed {
+    0% { color: var(--red); }
+    100% { color: var(--text-primary); }
+  }
+
+  /* Sparkline */
+  .sparkline-wrap {
+    height: 40px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .sparkline-wrap svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 2px;
+  }
+
+  .card-meta {
+    text-align: center;
+  }
+
+  .card-meta-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .card-meta-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  /* ── Two-Column Layout ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.3s forwards;
+  }
+
+  /* ── Daily Report ── */
+  .report-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    height: 100%;
+  }
+
+  .report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .report-title-group {}
+
+  .report-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .report-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .report-generated {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .report-section {
+    margin-bottom: 20px;
+  }
+
+  .report-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--cyan);
+    margin-bottom: 10px;
+  }
+
+  .report-paragraph {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c0c0c0;
+  }
+
+  .report-paragraph strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .report-highlights {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .highlight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--bg-secondary);
+    border-radius: 7px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    transition: border-color var(--transition);
+  }
+
+  .highlight-item:hover { border-color: var(--border-bright); }
+
+  .highlight-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+
+  .highlight-text {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #b0b0b0;
+  }
+
+  .highlight-text strong { color: var(--text-primary); }
+
+  /* ── Top Movers ── */
+  .movers-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .movers-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--bg-secondary);
+    border-radius: 7px;
+    padding: 3px;
+    margin-bottom: 16px;
+  }
+
+  .mover-tab {
+    flex: 1;
+    text-align: center;
+    padding: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--text-secondary);
+  }
+
+  .mover-tab.active.gainers { background: var(--green-dim); color: var(--green); }
+  .mover-tab.active.losers { background: var(--red-dim); color: var(--red); }
+  .mover-tab:not(.active):hover { color: var(--text-primary); }
+
+  .movers-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .mover-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    transition: all var(--transition);
+  }
+
+  .mover-item:hover {
+    border-color: var(--border-bright);
+    background: var(--bg-hover);
+  }
+
+  .mover-rank {
+    font-size: 11px;
+    color: var(--text-muted);
+    width: 16px;
+  }
+
+  .mover-ticker {
+    font-size: 13px;
+    font-weight: 700;
+    flex: 1;
+    margin-left: 8px;
+  }
+
+  .mover-price {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-right: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mover-pct {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-variant-numeric: tabular-nums;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  .mover-pct.up { color: var(--green); background: var(--green-dim); }
+  .mover-pct.down { color: var(--red); background: var(--red-dim); }
+
+  /* ── Sector Breakdown ── */
+  .sector-section {
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.4s forwards;
+  }
+
+  .sector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .sector-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    transition: all var(--transition);
+  }
+
+  .sector-card:hover {
+    border-color: var(--border-bright);
+    transform: translateY(-1px);
+  }
+
+  .sector-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  .sector-perf {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sector-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .sector-bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+
+  .sector-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  .footer-left {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .footer-right {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  /* ── Sentiment Bar ── */
+  .sentiment-bar-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.15s forwards;
+  }
+
+  .sentiment-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .sentiment-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .sentiment-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
+    transition: width 1.5s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .sentiment-pointer {
+    position: absolute;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+    transition: left 1.5s cubic-bezier(0.4,0,0.2,1);
+    transform: translateX(-50%);
+  }
+
+  .sentiment-value {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .sentiment-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .sentiment-wrap-inner { flex: 1; }
+
+  /* Tooltip */
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e1e1e;
+    color: var(--text-primary);
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    white-space: nowrap;
+    border: 1px solid var(--border-bright);
+    z-index: 999;
+    pointer-events: none;
+  }
+
+  /* ── Fear & Greed Index ── */
+  .fear-section {
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.18s forwards;
+  }
+
+  .fear-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    flex-wrap: wrap;
+  }
+
+  .fear-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  .fear-gauge-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+  .fear-gauge-wrap {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .fear-gauge-wrap svg { width: 100%; height: auto; }
+
+  #gauge-needle {
+    transform-origin: 0px 0px;
+    transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .fear-history-row {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    justify-content: center;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+
+  .fear-history-item { text-align: center; }
+
+  .fh-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .fh-value {
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fh-trend {
+    font-size: 10px;
+    margin-left: 3px;
+  }
+
+  .fear-factors-col { padding-top: 4px; }
+
+  .fear-factors-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+
+  .fear-factors-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .factor-item {}
+
+  .factor-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+  }
+
+  .factor-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .factor-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 6px;
+  }
+
+  .factor-val {
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .factor-bar-bg {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .factor-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* ── Market Intelligence ── */
+  .intel-section {
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease 0.45s forwards;
+  }
+
+  .intel-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .news-feed-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .news-feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .news-feed-header-title {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .news-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .news-list { display: flex; flex-direction: column; }
+
+  .news-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 14px;
+    transition: background var(--transition);
+    cursor: default;
+  }
+
+  .news-item:last-child { border-bottom: none; }
+  .news-item:hover { background: var(--bg-hover); }
+
+  .news-sentiment-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .news-body { flex: 1; }
+
+  .news-headline {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+  }
+
+  .news-summary {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 7px;
+  }
+
+  .news-footer-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .news-source {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+  }
+
+  .news-age {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .news-tickers {
+    display: flex;
+    gap: 4px;
+  }
+
+  .news-ticker-chip {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    letter-spacing: 0.3px;
+  }
+
+  .news-impact {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-left: auto;
+  }
+
+  .news-impact.high { background: rgba(239,68,68,0.15); color: #f87171; }
+  .news-impact.medium { background: var(--amber-dim); color: var(--amber); }
+  .news-impact.low { background: var(--border); color: var(--text-muted); }
+
+  /* ── Future Outlook ── */
+  .outlook-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .outlook-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .outlook-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    transition: background var(--transition);
+  }
+
+  .outlook-card.bullish::before { background: var(--green); }
+  .outlook-card.bearish::before { background: var(--red); }
+  .outlook-card.neutral::before { background: var(--amber); }
+
+  .outlook-card:hover { border-color: var(--border-bright); background: var(--bg-hover); }
+
+  .outlook-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .outlook-horizon { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-secondary); margin-bottom: 3px; }
+
+  .outlook-direction-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  .outlook-direction-badge.bullish { color: var(--green); background: var(--green-dim); }
+  .outlook-direction-badge.bearish { color: var(--red); background: var(--red-dim); }
+  .outlook-direction-badge.neutral { color: var(--amber); background: var(--amber-dim); }
+
+  .outlook-confidence {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .outlook-confidence-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .outlook-confidence-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1.2s ease;
+  }
+
+  .outlook-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .outlook-list-block {}
+
+  .outlook-list-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 5px;
+  }
+
+  .outlook-list-label.cat { color: var(--green); }
+  .outlook-list-label.risk { color: var(--red); }
+
+  .outlook-bullet {
+    display: flex;
+    gap: 5px;
+    font-size: 10px;
+    color: #999;
+    line-height: 1.4;
+    margin-bottom: 4px;
+  }
+
+  .outlook-bullet::before { content: '·'; color: #555; flex-shrink: 0; }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .two-col { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .fear-card { grid-template-columns: 1fr; }
+    .intel-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 640px) {
+    main, footer { padding: 16px; }
+    header { padding: 0 16px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .company-grid { grid-template-columns: 1fr; }
+    .fear-legend { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    Semi <span>Tracker</span>
+  </div>
+  <div class="header-right">
+    <div id="last-updated" class="header-last-updated">Loading data…</div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      Live
+    </div>
+    <div class="header-date" id="header-date"></div>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Semiconductor <span>Market Dashboard</span></h1>
+    <p>Real-time tracking of global semiconductor companies — prices, performance, and daily intelligence.</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card" style="--accent: var(--cyan)">
+      <div class="stat-label">Total Market Cap</div>
+      <div class="stat-value" id="stat-mcap">$0T</div>
+      <div class="stat-sub">16 tracked companies</div>
+    </div>
+    <div class="stat-card" style="--accent: var(--green)">
+      <div class="stat-label">Advancing</div>
+      <div class="stat-value" id="stat-adv" style="color:var(--green)">0</div>
+      <div class="stat-sub" id="stat-adv-sub"></div>
+    </div>
+    <div class="stat-card" style="--accent: var(--red)">
+      <div class="stat-label">Declining</div>
+      <div class="stat-value" id="stat-dec" style="color:var(--red)">0</div>
+      <div class="stat-sub" id="stat-dec-sub"></div>
+    </div>
+    <div class="stat-card" style="--accent: var(--purple)">
+      <div class="stat-label">Avg. Daily Change</div>
+      <div class="stat-value" id="stat-avg">0%</div>
+      <div class="stat-sub" id="stat-avg-sub"></div>
+    </div>
+  </div>
+
+  <!-- Sentiment -->
+  <div class="sentiment-bar-wrap">
+    <div class="sentiment-label">Market Sentiment</div>
+    <div class="sentiment-wrap-inner">
+      <div class="sentiment-track">
+        <div class="sentiment-fill" id="sent-fill" style="width:0%"></div>
+        <div class="sentiment-pointer" id="sent-ptr" style="left:0%"></div>
+      </div>
+      <div class="sentiment-labels">
+        <span>Bearish</span>
+        <span>Neutral</span>
+        <span>Bullish</span>
+      </div>
+    </div>
+    <div class="sentiment-value" id="sent-label">—</div>
+  </div>
+
+  <!-- Fear & Greed Index -->
+  <div class="fear-section">
+    <div class="section-header">
+      <div class="section-title">Fear &amp; Greed Index</div>
+      <div class="fear-legend">
+        <span style="color:#dc2626">● Extreme Fear</span>
+        <span style="color:#f97316">● Fear</span>
+        <span style="color:#eab308">● Neutral</span>
+        <span style="color:#84cc16">● Greed</span>
+        <span style="color:#16a34a">● Extreme Greed</span>
+      </div>
+    </div>
+    <div class="fear-card">
+      <div class="fear-gauge-col">
+        <div class="fear-gauge-wrap" id="fear-gauge-svg"></div>
+        <div class="fear-history-row">
+          <div class="fear-history-item">
+            <div class="fh-label">Yesterday</div>
+            <div class="fh-value" id="fh-yesterday">—</div>
+          </div>
+          <div class="fear-history-item">
+            <div class="fh-label">Last Week</div>
+            <div class="fh-value" id="fh-lastweek">—</div>
+          </div>
+          <div class="fear-history-item">
+            <div class="fh-label">Last Month</div>
+            <div class="fh-value" id="fh-lastmonth">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="fear-factors-col">
+        <div class="fear-factors-title">Contributing Factors</div>
+        <div class="fear-factors-list" id="fear-factors-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Company Cards -->
+  <div class="section-header">
+    <div class="section-title">Companies</div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterSector('All',this)">All</button>
+      <button class="filter-btn" onclick="filterSector('Equipment',this)">Equipment</button>
+      <button class="filter-btn" onclick="filterSector('Analog',this)">Analog</button>
+      <button class="filter-btn" onclick="filterSector('Memory',this)">Memory</button>
+      <button class="filter-btn" onclick="filterSector('Foundry',this)">Foundry</button>
+    </div>
+  </div>
+
+  <div class="company-grid" id="company-grid"></div>
+
+  <!-- Two-col: Report + Movers -->
+  <div class="two-col">
+    <!-- Daily Report -->
+    <div class="report-card">
+      <div class="report-header">
+        <div class="report-title-group">
+          <div class="report-title">Daily Intelligence Report</div>
+          <div class="report-subtitle" id="report-date-sub">Generated for today's session</div>
+        </div>
+        <div class="report-generated" id="report-time"></div>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Market Overview</div>
+        <p class="report-paragraph" id="report-overview"></p>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Key Highlights</div>
+        <div class="report-highlights" id="report-highlights"></div>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Sector Outlook</div>
+        <p class="report-paragraph" id="report-outlook"></p>
+      </div>
+
+      <div class="report-section" style="margin-bottom:0">
+        <div class="report-section-title">Watch List</div>
+        <p class="report-paragraph" id="report-watchlist"></p>
+      </div>
+    </div>
+
+    <!-- Top Movers -->
+    <div class="movers-card">
+      <div class="section-title" style="margin-bottom:14px">Top Movers</div>
+      <div class="movers-tabs">
+        <div class="mover-tab active gainers" onclick="showMovers('gainers',this)">▲ Gainers</div>
+        <div class="mover-tab losers" onclick="showMovers('losers',this)">▼ Losers</div>
+      </div>
+      <div class="movers-list" id="movers-list"></div>
+    </div>
+  </div>
+
+  <!-- Sector Breakdown -->
+  <div class="sector-section">
+    <div class="section-header">
+      <div class="section-title">Sector Performance</div>
+    </div>
+    <div class="sector-grid" id="sector-grid"></div>
+  </div>
+
+  <!-- Market Intelligence: News + Outlook -->
+  <div class="intel-section">
+    <div class="section-header">
+      <div class="section-title">Market Intelligence</div>
+      <div class="news-meta-row">
+        <span>Tracking latest semiconductor news</span>
+        <span>·</span>
+        <span id="news-time"></span>
+      </div>
+    </div>
+    <div class="intel-grid">
+      <div class="news-feed-card">
+        <div class="news-feed-header">
+          <div class="news-feed-header-title">Latest Headlines</div>
+          <div class="news-meta-row" id="news-count"></div>
+        </div>
+        <div class="news-list" id="news-list"></div>
+      </div>
+      <div class="outlook-col" id="outlook-list"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-left">
+    Semi Tracker © 2026 — Market data via Yahoo Finance. For informational purposes only.
+  </div>
+  <div class="footer-right">
+    Live prices · refreshes every 60s during market hours<br>
+    16 companies tracked across 8 sectors
+  </div>
+</footer>
+
+<script>
+'use strict';
+
+// ── Company Data ──────────────────────────────────────────────
+const COMPANIES = [
+  { ticker:'NVDA', name:'NVIDIA Corporation',    basePrice:138.45, marketCap:3400, sector:'GPU/AI',     cap:'$3.4T', employees:'36K', pe:65.2 },
+  { ticker:'TSM',  name:'Taiwan Semiconductor',  basePrice:192.30, marketCap:995,  sector:'Foundry',    cap:'$995B', employees:'73K', pe:22.1 },
+  { ticker:'AVGO', name:'Broadcom Inc.',          basePrice:197.50, marketCap:920,  sector:'Mixed Signal',cap:'$920B',employees:'20K', pe:34.8 },
+  { ticker:'AMD',  name:'Advanced Micro Devices', basePrice:118.90, marketCap:193,  sector:'GPU/AI',     cap:'$193B', employees:'26K', pe:28.4 },
+  { ticker:'QCOM', name:'Qualcomm Inc.',          basePrice:163.40, marketCap:182,  sector:'Mobile/RF',  cap:'$182B', employees:'51K', pe:18.2 },
+  { ticker:'ASML', name:'ASML Holding',           basePrice:862.70, marketCap:340,  sector:'Equipment',  cap:'$340B', employees:'42K', pe:41.3 },
+  { ticker:'AMAT', name:'Applied Materials',      basePrice:198.60, marketCap:168,  sector:'Equipment',  cap:'$168B', employees:'34K', pe:22.7 },
+  { ticker:'TXN',  name:'Texas Instruments',      basePrice:188.30, marketCap:171,  sector:'Analog',     cap:'$171B', employees:'34K', pe:35.1 },
+  { ticker:'MU',   name:'Micron Technology',      basePrice:102.45, marketCap:114,  sector:'Memory',     cap:'$114B', employees:'43K', pe:14.3 },
+  { ticker:'LRCX', name:'Lam Research',           basePrice:748.20, marketCap:99,   sector:'Equipment',  cap:'$99B',  employees:'18K', pe:28.9 },
+  { ticker:'KLAC', name:'KLA Corporation',        basePrice:705.30, marketCap:96,   sector:'Equipment',  cap:'$96B',  employees:'15K', pe:27.5 },
+  { ticker:'INTC', name:'Intel Corporation',      basePrice:21.80,  marketCap:93,   sector:'CPU/Foundry',cap:'$93B',  employees:'109K',pe:28.0 },
+  { ticker:'ADI',  name:'Analog Devices',         basePrice:228.50, marketCap:119,  sector:'Analog',     cap:'$119B', employees:'26K', pe:42.1 },
+  { ticker:'MRVL', name:'Marvell Technology',     basePrice:88.20,  marketCap:76,   sector:'Data Infra', cap:'$76B',  employees:'7K',  pe:55.6 },
+  { ticker:'NXPI', name:'NXP Semiconductors',     basePrice:235.60, marketCap:61,   sector:'Auto/IoT',   cap:'$61B',  employees:'34K', pe:16.8 },
+  { ticker:'ON',   name:'ON Semiconductor',       basePrice:43.20,  marketCap:19,   sector:'Power/Auto', cap:'$19B',  employees:'35K', pe:12.4 },
+];
+
+const SECTOR_COLORS = {
+  'GPU/AI':       { color:'var(--cyan)',   bg:'var(--cyan-dim)' },
+  'Foundry':      { color:'var(--purple)', bg:'var(--purple-dim)' },
+  'Mixed Signal': { color:'var(--amber)',  bg:'var(--amber-dim)' },
+  'Mobile/RF':    { color:'#60a5fa',       bg:'rgba(96,165,250,0.12)' },
+  'Equipment':    { color:'#a78bfa',       bg:'rgba(167,139,250,0.12)' },
+  'Analog':       { color:'var(--amber)',  bg:'var(--amber-dim)' },
+  'Memory':       { color:'var(--green)',  bg:'var(--green-dim)' },
+  'CPU/Foundry':  { color:'#fb923c',       bg:'rgba(251,146,60,0.12)' },
+  'Data Infra':   { color:'var(--cyan)',   bg:'var(--cyan-dim)' },
+  'Auto/IoT':     { color:'#34d399',       bg:'rgba(52,211,153,0.12)' },
+  'Power/Auto':   { color:'#f87171',       bg:'rgba(248,113,113,0.12)' },
+};
+
+// ── State ─────────────────────────────────────────────────────
+let state = {};
+let moverTab = 'gainers';
+
+// Seeded pseudo-random for deterministic history
+function seededRand(seed) {
+  let x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
+// Initialize state
+function initState() {
+  COMPANIES.forEach((c, idx) => {
+    // Generate 30-day history
+    const history = [];
+    let p = c.basePrice * (0.88 + seededRand(idx * 100) * 0.1);
+    for (let i = 0; i < 30; i++) {
+      const r = seededRand(idx * 100 + i) - 0.48;
+      p = p * (1 + r * 0.025);
+      history.push(+p.toFixed(2));
+    }
+    // Final price is the base
+    history[29] = c.basePrice;
+
+    const prevClose = history[28];
+    const dayChange = c.basePrice - prevClose;
+    const dayChangePct = (dayChange / prevClose) * 100;
+
+    state[c.ticker] = {
+      ...c,
+      price: c.basePrice,
+      history,
+      prevClose,
+      dayChange,
+      dayChangePct,
+    };
+  });
+}
+
+// ── Sparkline SVG ──────────────────────────────────────────────
+function buildSparkline(history, isUp) {
+  const W = 280, H = 40;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+  const pts = history.map((v, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const lineColor = isUp ? '#22c55e' : '#ef4444';
+  const gradId = `g_${Math.random().toString(36).slice(2,7)}`;
+
+  const polyPts = pts.join(' ');
+  const lastPt = pts[pts.length - 1].split(',');
+  const fillPts = `0,${H} ${polyPts} ${W},${H}`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lineColor}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${fillPts}" fill="url(#${gradId})"/>
+    <polyline points="${polyPts}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="2.5" fill="${lineColor}"/>
+  </svg>`;
+}
+
+// ── Build Company Cards ────────────────────────────────────────
+function buildCards() {
+  const grid = document.getElementById('company-grid');
+  grid.innerHTML = '';
+
+  COMPANIES.forEach(c => {
+    const s = state[c.ticker];
+    const sc = SECTOR_COLORS[c.sector] || { color: 'var(--cyan)', bg: 'var(--cyan-dim)' };
+    const isUp = s.dayChangePct >= 0;
+
+    const card = document.createElement('div');
+    card.className = 'company-card';
+    card.id = `card-${c.ticker}`;
+    card.dataset.sector = c.sector;
+
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="company-info">
+          <div class="ticker-badge">${c.ticker}</div>
+          <div class="company-name">${c.name}</div>
+        </div>
+        <div class="sector-tag" style="color:${sc.color};background:${sc.bg}">${c.sector}</div>
+      </div>
+      <div class="card-price-row">
+        <div class="price-display" id="price-${c.ticker}">$${s.price.toFixed(2)}</div>
+        <div class="price-change ${isUp?'up':'down'}" id="chg-${c.ticker}">
+          ${isUp?'+':''}${s.dayChange.toFixed(2)} (${isUp?'+':''}${s.dayChangePct.toFixed(2)}%)
+        </div>
+      </div>
+      <div class="sparkline-wrap" id="spark-${c.ticker}">
+        ${buildSparkline(s.history, isUp)}
+      </div>
+      <div class="card-footer">
+        <div class="card-meta">
+          <div class="card-meta-label">Mkt Cap</div>
+          <div class="card-meta-value">${c.cap}</div>
+        </div>
+        <div class="card-meta">
+          <div class="card-meta-label">P/E</div>
+          <div class="card-meta-value">${c.pe}x</div>
+        </div>
+        <div class="card-meta">
+          <div class="card-meta-label">Employees</div>
+          <div class="card-meta-value">${c.employees}</div>
+        </div>
+        <div class="card-meta">
+          <div class="card-meta-label">Prev Close</div>
+          <div class="card-meta-value" id="prevc-${c.ticker}">$${s.prevClose.toFixed(2)}</div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ── Update Prices ──────────────────────────────────────────────
+function updatePrices() {
+  COMPANIES.forEach(c => {
+    const s = state[c.ticker];
+    const prevPrice = s.price;
+    const drift = (seededRand(Date.now() * 0.001 + c.ticker.charCodeAt(0)) - 0.49) * 0.003;
+    s.price = +(s.price * (1 + drift)).toFixed(2);
+
+    // Update history tail
+    s.history.push(s.price);
+    if (s.history.length > 30) s.history.shift();
+
+    s.dayChange = +(s.price - s.prevClose).toFixed(2);
+    s.dayChangePct = +((s.dayChange / s.prevClose) * 100).toFixed(3);
+
+    const isUp = s.dayChangePct >= 0;
+    const wentUp = s.price > prevPrice;
+
+    // Update price display
+    const priceEl = document.getElementById(`price-${c.ticker}`);
+    const chgEl = document.getElementById(`chg-${c.ticker}`);
+    if (priceEl) {
+      priceEl.textContent = `$${s.price.toFixed(2)}`;
+      priceEl.classList.remove('flash-up', 'flash-down');
+      void priceEl.offsetWidth;
+      priceEl.classList.add(wentUp ? 'flash-up' : 'flash-down');
+    }
+    if (chgEl) {
+      chgEl.textContent = `${isUp?'+':''}${s.dayChange.toFixed(2)} (${isUp?'+':''}${s.dayChangePct.toFixed(2)}%)`;
+      chgEl.className = `price-change ${isUp?'up':'down'}`;
+    }
+    // Redraw sparkline
+    const sparkEl = document.getElementById(`spark-${c.ticker}`);
+    if (sparkEl) sparkEl.innerHTML = buildSparkline(s.history, isUp);
+  });
+
+  updateStats();
+  updateMovers();
+}
+
+// ── Stats ──────────────────────────────────────────────────────
+function updateStats() {
+  const gainers = COMPANIES.filter(c => state[c.ticker].dayChangePct >= 0);
+  const losers  = COMPANIES.filter(c => state[c.ticker].dayChangePct < 0);
+  const avgChg  = COMPANIES.reduce((a,c) => a + state[c.ticker].dayChangePct, 0) / COMPANIES.length;
+
+  const totalMcap = COMPANIES.reduce((a,c) => a + c.marketCap, 0);
+
+  document.getElementById('stat-mcap').textContent = `$${(totalMcap/1000).toFixed(1)}T`;
+  document.getElementById('stat-adv').textContent = gainers.length;
+  document.getElementById('stat-adv-sub').textContent = `${losers.length} declining`;
+  document.getElementById('stat-dec').textContent = losers.length;
+  document.getElementById('stat-dec-sub').textContent = `${gainers.length} advancing`;
+  const avgEl = document.getElementById('stat-avg');
+  avgEl.textContent = `${avgChg >= 0 ? '+' : ''}${avgChg.toFixed(2)}%`;
+  avgEl.style.color = avgChg >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('stat-avg-sub').textContent = avgChg >= 0 ? 'Positive session' : 'Negative session';
+
+  // Sentiment
+  const sentPct = Math.min(100, Math.max(0, 50 + avgChg * 12));
+  document.getElementById('sent-fill').style.width = sentPct + '%';
+  document.getElementById('sent-ptr').style.left = sentPct + '%';
+  const sentLabel = document.getElementById('sent-label');
+  if (sentPct > 65) { sentLabel.textContent = 'Bullish'; sentLabel.style.color = 'var(--green)'; }
+  else if (sentPct < 35) { sentLabel.textContent = 'Bearish'; sentLabel.style.color = 'var(--red)'; }
+  else { sentLabel.textContent = 'Neutral'; sentLabel.style.color = 'var(--amber)'; }
+}
+
+// ── Movers ────────────────────────────────────────────────────
+function showMovers(tab, el) {
+  moverTab = tab;
+  document.querySelectorAll('.mover-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMovers();
+}
+
+function renderMovers() {
+  const sorted = [...COMPANIES].sort((a,b) =>
+    moverTab === 'gainers'
+      ? state[b.ticker].dayChangePct - state[a.ticker].dayChangePct
+      : state[a.ticker].dayChangePct - state[b.ticker].dayChangePct
+  ).slice(0, 5);
+
+  const list = document.getElementById('movers-list');
+  list.innerHTML = sorted.map((c, i) => {
+    const s = state[c.ticker];
+    const up = s.dayChangePct >= 0;
+    return `
+      <div class="mover-item">
+        <div class="mover-rank">${i+1}</div>
+        <div class="mover-ticker">${c.ticker}</div>
+        <div class="mover-price">$${s.price.toFixed(2)}</div>
+        <div class="mover-pct ${up?'up':'down'}">${up?'+':''}${s.dayChangePct.toFixed(2)}%</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateMovers() { renderMovers(); }
+
+// ── Sector Breakdown ───────────────────────────────────────────
+function buildSectorGrid() {
+  const sectors = {};
+  COMPANIES.forEach(c => {
+    if (!sectors[c.sector]) sectors[c.sector] = { changes: [], count: 0 };
+    sectors[c.sector].changes.push(state[c.ticker].dayChangePct);
+    sectors[c.sector].count++;
+  });
+
+  const grid = document.getElementById('sector-grid');
+  grid.innerHTML = Object.entries(sectors).map(([name, data]) => {
+    const avg = data.changes.reduce((a,b)=>a+b,0)/data.changes.length;
+    const isUp = avg >= 0;
+    const sc = SECTOR_COLORS[name] || { color: 'var(--cyan)', bg: 'var(--cyan-dim)' };
+    const barPct = Math.min(100, Math.abs(avg) * 15 + 20);
+    return `
+      <div class="sector-card">
+        <div class="sector-name">${name}</div>
+        <div class="sector-perf" style="color:${isUp?'var(--green)':'var(--red)'}">
+          ${isUp?'+':''}${avg.toFixed(2)}%
+        </div>
+        <div class="sector-count">${data.count} compan${data.count>1?'ies':'y'}</div>
+        <div class="sector-bar-bg">
+          <div class="sector-bar-fill" style="width:${barPct}%;background:${isUp?'var(--green)':'var(--red)'}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Sector Filter ──────────────────────────────────────────────
+function filterSector(sector, el) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.company-card').forEach(card => {
+    if (sector === 'All' || card.dataset.sector === sector) {
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+}
+
+// ── Daily Report ───────────────────────────────────────────────
+function buildReport() {
+  const now = new Date();
+  const gainers = [...COMPANIES].filter(c => state[c.ticker].dayChangePct >= 0)
+                                .sort((a,b) => state[b.ticker].dayChangePct - state[a.ticker].dayChangePct);
+  const losers  = [...COMPANIES].filter(c => state[c.ticker].dayChangePct < 0)
+                                .sort((a,b) => state[a.ticker].dayChangePct - state[b.ticker].dayChangePct);
+  const avgChg  = COMPANIES.reduce((a,c) => a + state[c.ticker].dayChangePct, 0) / COMPANIES.length;
+  const top = gainers[0] ? state[gainers[0].ticker] : null;
+  const bot = losers[0]  ? state[losers[0].ticker]  : null;
+
+  const direction = avgChg >= 0.3 ? 'broadly bullish' : avgChg <= -0.3 ? 'broadly bearish' : 'mixed';
+  const topName   = top ? gainers[0].name : '—';
+  const topTicker = top ? gainers[0].ticker : '—';
+  const botName   = bot ? losers[0].name : '—';
+  const botTicker = bot ? losers[0].ticker : '—';
+
+  document.getElementById('report-date-sub').textContent =
+    `Intelligence report · ${now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}`;
+  document.getElementById('report-time').innerHTML =
+    `Generated at<br>${now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`;
+
+  document.getElementById('report-overview').innerHTML =
+    `The semiconductor sector is trading <strong>${direction}</strong> today with the composite index averaging
+    <strong style="color:${avgChg>=0?'var(--green)':'var(--red)'}">${avgChg>=0?'+':''}${avgChg.toFixed(2)}%</strong>
+    across all tracked equities. <strong>${gainers.length}</strong> of <strong>${COMPANIES.length}</strong> names are in positive
+    territory. ${avgChg >= 0
+      ? 'Demand signals across the AI-accelerator and advanced packaging supply chain continue to underpin elevated valuations.'
+      : 'Macro headwinds and inventory correction concerns are weighing on near-term sentiment across the supply chain.'
+    }`;
+
+  const highlights = [];
+  if (top) highlights.push({
+    color: 'var(--green)',
+    text: `<strong>${topTicker} (${topName})</strong> leads today's session with a gain of <strong style="color:var(--green)">+${state[topTicker].dayChangePct.toFixed(2)}%</strong>, trading at $${state[topTicker].price.toFixed(2)}.`
+  });
+  if (bot) highlights.push({
+    color: 'var(--red)',
+    text: `<strong>${botTicker} (${botName})</strong> is the session's notable laggard, down <strong style="color:var(--red)">${state[botTicker].dayChangePct.toFixed(2)}%</strong>, reflecting sector-specific headwinds.`
+  });
+  const nvda = state['NVDA'], amat = state['AMAT'];
+  highlights.push({
+    color: 'var(--cyan)',
+    text: `<strong>NVDA</strong> continues to command attention as the AI compute leader — shares at <strong>$${nvda.price.toFixed(2)}</strong> reflect sustained enterprise GPU demand.`
+  });
+  highlights.push({
+    color: 'var(--purple)',
+    text: `Equipment stocks <strong>AMAT</strong> ($${amat.price.toFixed(2)}) and <strong>ASML</strong> ($${state['ASML'].price.toFixed(2)}) are key indicators of fab spending health.`
+  });
+
+  document.getElementById('report-highlights').innerHTML = highlights.map(h => `
+    <div class="highlight-item">
+      <div class="highlight-dot" style="background:${h.color}"></div>
+      <div class="highlight-text">${h.text}</div>
+    </div>
+  `).join('');
+
+  const equipChg = ['ASML','AMAT','LRCX','KLAC'].reduce((a,t)=>a+state[t].dayChangePct,0)/4;
+  const memChg   = ['MU'].reduce((a,t)=>a+state[t].dayChangePct,0)/1;
+  document.getElementById('report-outlook').innerHTML =
+    `Equipment names averaged <strong style="color:${equipChg>=0?'var(--green)':'var(--red)'}">${equipChg>=0?'+':''}${equipChg.toFixed(2)}%</strong> today,
+    suggesting fab capex sentiment is <strong>${equipChg >= 0 ? 'constructive' : 'cautious'}</strong>.
+    Memory (led by MU at <strong style="color:${memChg>=0?'var(--green)':'var(--red)'}">${memChg>=0?'+':''}${memChg.toFixed(2)}%</strong>)
+    ${memChg >= 0 ? 'shows recovery momentum as HBM supply tightens for AI accelerator builds' : 'continues to face pricing headwinds in legacy DRAM nodes'}.
+    Analog names remain defensive with steady dividend yield support.`;
+
+  const watchList = gainers.slice(1, 4).map(c => `<strong>${c.ticker}</strong>`).join(', ');
+  document.getElementById('report-watchlist').innerHTML =
+    `Traders are monitoring ${watchList} as momentum candidates.
+    <strong>INTC</strong> at <strong>$${state['INTC'].price.toFixed(2)}</strong> remains a turnaround story —
+    any positive commentary on foundry customer wins or process node progress at Intel 18A could catalyze a re-rating.
+    <strong>ASML</strong> export license developments continue to be a macro wildcard for the sector.`;
+}
+
+// ── Fear & Greed Index ────────────────────────────────────────
+const FEAR_ZONES = [
+  { pct:0.25, color:'#dc2626', name:'Extreme Fear' },
+  { pct:0.15, color:'#f97316', name:'Fear'         },
+  { pct:0.20, color:'#eab308', name:'Neutral'      },
+  { pct:0.15, color:'#84cc16', name:'Greed'        },
+  { pct:0.25, color:'#16a34a', name:'Extreme Greed'},
+];
+
+function calcFearIndex() {
+  // 1. Price Momentum (25%): % stocks above their 20-day SMA
+  const momentum = COMPANIES.filter(c => {
+    const h = state[c.ticker].history;
+    const sma = h.slice(0, Math.min(20, h.length)).reduce((a,b)=>a+b,0) / Math.min(20, h.length);
+    return state[c.ticker].price > sma;
+  }).length / COMPANIES.length;
+
+  // 2. Market Breadth (25%): % advancing today
+  const breadth = COMPANIES.filter(c => state[c.ticker].dayChangePct >= 0).length / COMPANIES.length;
+
+  // 3. Volatility (20%): inverted — low volatility → greed
+  const avgAbsChg = COMPANIES.reduce((a,c) => a + Math.abs(state[c.ticker].dayChangePct), 0) / COMPANIES.length;
+  const volatility = Math.max(0, Math.min(1, 1 - avgAbsChg / 3.0));
+
+  // 4. Momentum Strength (15%): RSI-like % up-days in history
+  const rsiAvg = COMPANIES.reduce((total,c) => {
+    const h = state[c.ticker].history;
+    const ups = h.slice(1).filter((v,i) => v >= h[i]).length;
+    return total + ups / Math.max(1, h.length - 1);
+  }, 0) / COMPANIES.length;
+
+  // 5. Sector Breadth (15%): % of sectors positive
+  const sectorMap = {};
+  COMPANIES.forEach(c => {
+    if (!sectorMap[c.sector]) sectorMap[c.sector] = [];
+    sectorMap[c.sector].push(state[c.ticker].dayChangePct);
+  });
+  const posSectors = Object.values(sectorMap).filter(arr => arr.reduce((a,b)=>a+b,0)/arr.length > 0).length;
+  const sectorBreadth = posSectors / Object.keys(sectorMap).length;
+
+  const raw = momentum*0.25 + breadth*0.25 + volatility*0.20 + rsiAvg*0.15 + sectorBreadth*0.15;
+  const score = Math.round(Math.min(100, Math.max(0, raw * 100)));
+
+  return {
+    score,
+    factors: [
+      { name:'Price Momentum',   desc:'% above 20-day SMA',         val: Math.round(momentum*100),    weight:25 },
+      { name:'Market Breadth',   desc:'% advancing today',          val: Math.round(breadth*100),     weight:25 },
+      { name:'Volatility',       desc:'Inverse avg daily move',     val: Math.round(volatility*100),  weight:20 },
+      { name:'Momentum Strength',desc:'RSI-proxy up-day ratio',     val: Math.round(rsiAvg*100),      weight:15 },
+      { name:'Sector Breadth',   desc:'% of sectors positive',      val: Math.round(sectorBreadth*100), weight:15 },
+    ]
+  };
+}
+
+function zoneForScore(score) {
+  let cum = 0;
+  for (const z of FEAR_ZONES) {
+    cum += z.pct * 100;
+    if (score <= cum) return z;
+  }
+  return FEAR_ZONES[FEAR_ZONES.length - 1];
+}
+
+function scoreColor(score) { return zoneForScore(score).color; }
+
+function buildFearGaugeSVG() {
+  const cx = 140, cy = 132, r = 98, sw = 16;
+
+  // Convert gauge score (0–100) to polar angle in degrees
+  // Score 0 = -90° (left), Score 50 = 0° (top), Score 100 = +90° (right)
+  function scoreAngle(s) { return s * 1.8 - 90; }
+
+  // Convert gauge angle (0=up, CW positive) to SVG x,y
+  function pt(deg) {
+    const rad = deg * Math.PI / 180;
+    return { x: +(cx + r * Math.sin(rad)).toFixed(2), y: +(cy - r * Math.cos(rad)).toFixed(2) };
+  }
+
+  // Draw a single arc segment from angle a1 to a2 (both < 180° span)
+  function arcPath(a1, a2) {
+    const s = pt(a1), e = pt(a2);
+    // sweep=1: clockwise in SVG screen coords = goes from left upward through top to right
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 0 1 ${e.x} ${e.y}`;
+  }
+
+  const GAP = 2.5; // degrees gap between zones
+
+  // Background track (two quarter-arcs to avoid 180° ambiguity)
+  const bgL = pt(-90), bgM = pt(0), bgR = pt(90);
+  let svg = `<path d="M ${bgL.x} ${bgL.y} A ${r} ${r} 0 0 1 ${bgM.x} ${bgM.y} A ${r} ${r} 0 0 1 ${bgR.x} ${bgR.y}"
+    fill="none" stroke="#1d1d1d" stroke-width="${sw + 2}" stroke-linecap="butt"/>`;
+
+  // Zone arcs — each zone is its own path, no dasharray
+  const BOUNDS = [0, 25, 40, 60, 75, 100];
+  const COLORS = ['#dc2626', '#f97316', '#eab308', '#84cc16', '#16a34a'];
+  BOUNDS.slice(0, -1).forEach((from, i) => {
+    const to = BOUNDS[i + 1];
+    const a1 = scoreAngle(from) + (i > 0 ? GAP : 0);
+    const a2 = scoreAngle(to)   - (i < 4 ? GAP : 0);
+    svg += `\n  <path d="${arcPath(a1, a2)}" fill="none" stroke="${COLORS[i]}"
+    stroke-width="${sw}" stroke-linecap="round" opacity="0.9"/>`;
+  });
+
+  // Tick marks at each zone boundary
+  const tR = r + 11;
+  BOUNDS.forEach(s => {
+    const rad = scoreAngle(s) * Math.PI / 180;
+    const tx = +(cx + tR * Math.sin(rad)).toFixed(1);
+    const ty = +(cy - tR * Math.cos(rad)).toFixed(1);
+    svg += `\n  <circle cx="${tx}" cy="${ty}" r="2" fill="#2e2e2e"/>`;
+  });
+
+  // Needle — pivot at origin, wrapped in translate so transform-origin: 0px 0px works
+  svg += `
+  <g transform="translate(${cx},${cy})">
+    <g id="gauge-needle">
+      <line x1="0" y1="6" x2="0" y2="-76" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="7" fill="#ffffff"/>
+      <circle cx="0" cy="0" r="3.5" fill="#080808"/>
+    </g>
+  </g>
+  <text id="gauge-score" x="${cx}" y="${cy - 26}" text-anchor="middle"
+        font-size="40" font-weight="800" fill="#f0f0f0"
+        font-family="system-ui,-apple-system,sans-serif">—</text>
+  <text id="gauge-zone" x="${cx}" y="${cy - 7}" text-anchor="middle"
+        font-size="11" font-weight="700" letter-spacing="0.8"
+        font-family="system-ui,-apple-system,sans-serif">—</text>`;
+
+  document.getElementById('fear-gauge-svg').innerHTML =
+    `<svg viewBox="0 0 280 150" xmlns="http://www.w3.org/2000/svg">${svg}\n</svg>`;
+}
+
+function updateFearGauge() {
+  const { score, factors } = calcFearIndex();
+  const zone = zoneForScore(score);
+  const needleAngle = (score/100)*180 - 90;
+
+  const needle = document.getElementById('gauge-needle');
+  if (needle) needle.style.transform = `rotate(${needleAngle}deg)`;
+
+  const scoreEl = document.getElementById('gauge-score');
+  if (scoreEl) { scoreEl.textContent = score; scoreEl.setAttribute('fill','#f0f0f0'); }
+
+  const zoneEl = document.getElementById('gauge-zone');
+  if (zoneEl) { zoneEl.textContent = zone.name.toUpperCase(); zoneEl.setAttribute('fill', zone.color); }
+
+  // Historical values (seeded offsets from current score)
+  const yest  = Math.max(0, Math.min(100, score + Math.round((seededRand(200)-0.5)*18)));
+  const week  = Math.max(0, Math.min(100, score + Math.round((seededRand(201)-0.5)*28)));
+  const month = Math.max(0, Math.min(100, score + Math.round((seededRand(202)-0.5)*40)));
+
+  function fhHtml(val, ref) {
+    const c = scoreColor(val);
+    const arrow = val >= ref ? '▲' : '▼';
+    const arrowC = val >= ref ? 'var(--green)' : 'var(--red)';
+    return `<span style="color:${c}">${val}</span><span class="fh-trend" style="color:${arrowC}">${arrow}</span>`;
+  }
+
+  document.getElementById('fh-yesterday').innerHTML = fhHtml(yest,  score);
+  document.getElementById('fh-lastweek').innerHTML  = fhHtml(week,  score);
+  document.getElementById('fh-lastmonth').innerHTML = fhHtml(month, score);
+
+  // Factor bars
+  const list = document.getElementById('fear-factors-list');
+  list.innerHTML = factors.map(f => {
+    const barColor = f.val >= 60 ? 'var(--green)' : f.val >= 40 ? 'var(--amber)' : 'var(--red)';
+    return `
+      <div class="factor-item">
+        <div class="factor-top">
+          <div><span class="factor-name">${f.name}</span><span class="factor-desc">— ${f.desc}</span></div>
+          <div class="factor-val" style="color:${barColor}">${f.val}%</div>
+        </div>
+        <div class="factor-bar-bg">
+          <div class="factor-bar-fill" style="width:${f.val}%;background:${barColor}"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── News Pool ─────────────────────────────────────────────────
+const NEWS_POOL = [
+  { h:'NVIDIA Blackwell GPU Demand Continues to Outpace Supply Through Q3 2026', src:'Semiconductor Digest', age:'23m', s:'positive', impact:'high',   tickers:['NVDA'],             body:'Data center customers are booking orders 3–4 quarters out. CoWoS advanced packaging remains the critical bottleneck as TSMC scrambles to add substrate capacity.' },
+  { h:'TSMC 2nm Volume Production On Track for H2 2026 Apple and NVIDIA Ramp',  src:'DigiTimes',           age:'1h',  s:'positive', impact:'high',   tickers:['TSM','NVDA'],        body:'N2 yield rates have exceeded internal targets ahead of major customer tape-outs. ASML High-NA EUV tools are now operational at Fab 20 in Hsinchu.' },
+  { h:'AMD Instinct MI325X Sees Strong Hyperscaler Adoption in Q2 2026',         src:'The Register',        age:'2h',  s:'positive', impact:'medium', tickers:['AMD'],               body:'Microsoft Azure and Google Cloud accelerate MI325X deployments as enterprises seek NVIDIA alternatives for inference-heavy workloads.' },
+  { h:'ASML EUV Tool Backlog Grows to €42B — Equipment Supercycle Intact',       src:'Bloomberg Semi',      age:'3h',  s:'positive', impact:'high',   tickers:['ASML','AMAT','LRCX'],body:'New system order intake hit €12.3B in Q2 2026, driven by TSMC, Samsung, and Intel capacity expansions for AI and advanced mobile chips.' },
+  { h:'Micron HBM4 Production Ramp Ahead of Schedule, Priced at 5× DRAM Premium',src:'IC Insights',        age:'4h',  s:'positive', impact:'medium', tickers:['MU'],                body:'Micron confirms HBM4 shipments are tracking ahead of plan. Initial volumes are secured by a major AI accelerator customer through Q1 2027.' },
+  { h:'Qualcomm Snapdragon X Elite Captures 18% PC Market Share',                 src:'IDC Report',          age:'5h',  s:'positive', impact:'medium', tickers:['QCOM','INTC'],       body:'Arm-based PC shipments accelerate as OEMs commit to next-gen Snapdragon for flagship notebooks, putting further pressure on Intel client.' },
+  { h:'Broadcom Custom AI ASIC Revenue Expected to Hit $15B in FY2026',           src:'Bernstein Research',  age:'6h',  s:'positive', impact:'high',   tickers:['AVGO'],              body:'Broadcom\'s XPU division (Google TPU v6, Meta MTIA) continues steep growth with new hyperscaler wins expected in H2 2026.' },
+  { h:'BIS Expands AI Chip Export Controls — H20 Variants Newly Restricted',     src:'Reuters',             age:'1h',  s:'negative', impact:'high',   tickers:['NVDA','AMD','QCOM'], body:'The Bureau of Industry and Security adds restrictions on advanced AI accelerators, potentially impacting NVIDIA\'s $15B annual China revenue.' },
+  { h:'Intel 18A Yield Rates Below Internal Targets; Foundry Wins at Risk',       src:'SemiAccurate',        age:'2h',  s:'negative', impact:'high',   tickers:['INTC'],              body:'Sources indicate Intel\'s 18A process is experiencing lower-than-expected yields, raising concerns about commitments from Microsoft and MediaTek.' },
+  { h:'Legacy DRAM Spot Prices Fall 8% in June as China Capacity Comes Online',  src:'TrendForce',          age:'30m', s:'negative', impact:'medium', tickers:['MU'],                body:'Spot DDR4 prices decline sharply as Chinese DRAM producers ramp capacity, creating near-term ASP headwinds for Micron\'s commodity segment.' },
+  { h:'Automotive Semiconductor Inventory Correction Extends Into Q3 2026',       src:'Morgan Stanley',      age:'4h',  s:'negative', impact:'medium', tickers:['ON','NXPI','ADI'],   body:'Automotive OEM inventory normalization continues longer than expected, with Tier-1 suppliers destocking MCUs and power devices.' },
+  { h:'Taiwan Strait Military Exercises Renew Geopolitical Risk Premium on TSM', src:'Financial Times',     age:'6h',  s:'negative', impact:'high',   tickers:['TSM'],               body:'Increased PLA naval activity near Taiwan has prompted institutions to reprice geopolitical risk, widening the ADR discount.' },
+  { h:'SEMI: Global Equipment Billings Hit $26.2B in Q1 2026, +12% YoY',        src:'SEMI.org',            age:'8h',  s:'neutral',  impact:'medium', tickers:['AMAT','LRCX','KLAC'],body:'The global semiconductor equipment market grew 12% year-over-year in Q1, led by leading-edge logic and advanced memory fabs.' },
+  { h:'Marvell Completes $1.5B Data Center Networking ASIC Design Win',           src:'EE Times',            age:'3h',  s:'neutral',  impact:'medium', tickers:['MRVL'],              body:'Marvell secures a multi-year supply agreement for co-packaged optics and Ethernet switch silicon with a major hyperscale cloud provider.' },
+  { h:'Applied Materials Files Patent for Novel GAA Transistor Deposition Tool', src:'USPTO Filing',        age:'1d',  s:'neutral',  impact:'low',    tickers:['AMAT'],              body:'Applied Materials\' latest filing reveals new approaches to ALD for GAA nanosheet transistors used in 2nm and below process nodes.' },
+];
+
+function buildNewsSection(fearScore) {
+  const avgChg = COMPANIES.reduce((a,c)=>a+state[c.ticker].dayChangePct,0)/COMPANIES.length;
+  const isBull = avgChg > 0.3;
+  const isBear = avgChg < -0.3;
+
+  // Select 6 articles weighted by market direction
+  const pos = NEWS_POOL.filter(n=>n.s==='positive');
+  const neg = NEWS_POOL.filter(n=>n.s==='negative');
+  const neu = NEWS_POOL.filter(n=>n.s==='neutral');
+
+  let selected = [];
+  if (isBull)      selected = [...pos.slice(0,4), ...neg.slice(0,1), ...neu.slice(0,1)];
+  else if (isBear) selected = [...neg.slice(0,4), ...pos.slice(0,1), ...neu.slice(0,1)];
+  else             selected = [...pos.slice(0,3), ...neg.slice(0,2), ...neu.slice(0,1)];
+
+  const sentColor = { positive:'var(--green)', negative:'var(--red)', neutral:'var(--amber)' };
+  const now = new Date();
+  document.getElementById('news-time').textContent =
+    'Updated ' + now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('news-count').textContent =
+    `${selected.length} stories · Sorted by impact`;
+
+  document.getElementById('news-list').innerHTML = selected.map(n => `
+    <div class="news-item">
+      <div class="news-sentiment-dot" style="background:${sentColor[n.s]}"></div>
+      <div class="news-body">
+        <div class="news-headline">${n.h}</div>
+        <div class="news-summary">${n.body}</div>
+        <div class="news-footer-row">
+          <span class="news-source">${n.src}</span>
+          <span class="news-age">${n.age} ago</span>
+          <div class="news-tickers">${n.tickers.map(t=>`<span class="news-ticker-chip">${t}</span>`).join('')}</div>
+          <span class="news-impact ${n.impact}">${n.impact}</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Future Outlook ────────────────────────────────────────────
+function buildFutureOutlook(fearScore) {
+  const avgChg = COMPANIES.reduce((a,c)=>a+state[c.ticker].dayChangePct,0)/COMPANIES.length;
+  const gainers = COMPANIES.filter(c=>state[c.ticker].dayChangePct>=0).length;
+
+  const dir = (score, threshold) =>
+    score > threshold ? 'bullish' : score < (100-threshold) ? 'bearish' : 'neutral';
+
+  const dirArrow = d => d==='bullish'?'▲':d==='bearish'?'▼':'→';
+
+  const outlooks = [
+    {
+      horizon:'1 Week', label:'Short-Term',
+      direction: avgChg > 0.4 ? 'bullish' : avgChg < -0.4 ? 'bearish' : 'neutral',
+      confidence: Math.min(82, Math.max(44, 55 + fearScore*0.25)),
+      catalysts:['Fed rate commentary & June CPI print', `Broad ${gainers>=10?'advance':'recovery'} in AI names`, 'Weekly options expiry positioning'],
+      risks:['Export control headline risk (BIS)', 'Taiwan geopolitical developments', 'Profit-taking after recent moves'],
+    },
+    {
+      horizon:'1 Month', label:'Medium-Term',
+      direction: dir(fearScore, 55),
+      confidence: Math.min(75, Math.max(42, 58 + (fearScore-50)*0.35)),
+      catalysts:['Q2 2026 earnings: TSMC, ASML, NVDA report in July', 'CHIPS Act milestone disbursements', 'HBM supply tightness supporting memory ASPs'],
+      risks:['Intel foundry yield concerns weigh on equipment', 'Automotive inventory overhang in analog/power', 'Macro growth concerns if PMI disappoints'],
+    },
+    {
+      horizon:'3 Months', label:'Long-Term',
+      direction:'bullish',
+      confidence:72,
+      catalysts:['AI cluster expansion → GPU, HBM, networking demand', 'TSMC 2nm volume ramp (H2 2026)', 'ASML High-NA EUV first full-year deliveries', 'Memory recovery — NAND & DRAM pricing normalization'],
+      risks:['Tightening export controls reduce TAM', 'AI capex moderation if hyperscaler ROI disappoints', 'Currency headwinds on USD revenue (ASML, TSM)'],
+    },
+  ];
+
+  const dirColor = { bullish:'var(--green)', bearish:'var(--red)', neutral:'var(--amber)' };
+  const confColor = d => d==='bullish'?'var(--green)':d==='bearish'?'var(--red)':'var(--amber)';
+
+  document.getElementById('outlook-list').innerHTML = outlooks.map(o => {
+    const conf = Math.round(o.confidence);
+    return `<div class="outlook-card ${o.direction}">
+      <div class="outlook-card-top">
+        <div>
+          <div class="outlook-horizon">${o.horizon} · ${o.label}</div>
+        </div>
+        <div class="outlook-direction-badge ${o.direction}">
+          ${dirArrow(o.direction)} ${o.direction.charAt(0).toUpperCase()+o.direction.slice(1)}
+        </div>
+      </div>
+      <div class="outlook-confidence">Confidence: <strong style="color:${confColor(o.direction)}">${conf}%</strong></div>
+      <div class="outlook-confidence-bar">
+        <div class="outlook-confidence-fill" style="width:${conf}%;background:${confColor(o.direction)}"></div>
+      </div>
+      <div class="outlook-lists">
+        <div class="outlook-list-block">
+          <div class="outlook-list-label cat">Catalysts</div>
+          ${o.catalysts.map(c=>`<div class="outlook-bullet">${c}</div>`).join('')}
+        </div>
+        <div class="outlook-list-block">
+          <div class="outlook-list-label risk">Risks</div>
+          ${o.risks.map(r=>`<div class="outlook-bullet">${r}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Date/Time ──────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('header-date').textContent =
+    now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) +
+    ' · ' + now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ── Yahoo Finance real data layer ──────────────────────────────
+
+let realDataLoaded = false;
+let priceIntervalId = null;
+
+function isMarketHours() {
+  const now   = new Date();
+  const day   = now.getDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const et    = new Date(etStr);
+  const mins  = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960; // 9:30 AM – 4:00 PM ET
+}
+
+function applyYFData(ticker, result, range) {
+  const meta   = result.meta;
+  const quotes = result.indicators && result.indicators.quote && result.indicators.quote[0];
+  const closes = quotes && quotes.close
+    ? quotes.close.filter(function(v) { return v != null; })
+    : [];
+
+  const s = state[ticker];
+  if (!s) return;
+
+  s.price    = +(meta.regularMarketPrice || s.price).toFixed(2);
+  s.prevClose = +(meta.previousClose || meta.chartPreviousClose || s.prevClose).toFixed(2);
+  s.dayChange = +(s.price - s.prevClose).toFixed(2);
+  s.dayChangePct = meta.regularMarketChangePercent != null
+    ? +meta.regularMarketChangePercent.toFixed(3)
+    : +((s.dayChange / s.prevClose) * 100).toFixed(3);
+  s.volume   = meta.regularMarketVolume || 0;
+  s.error    = false;
+
+  if (range === '3mo' && closes.length >= 5) {
+    s.history = closes.slice(-30).map(function(v) { return +v.toFixed(2); });
+  }
+}
+
+function updateLiveCards(flash) {
+  COMPANIES.forEach(function(c) {
+    const s    = state[c.ticker];
+    const card = document.getElementById('card-' + c.ticker);
+    if (!card) return;
+
+    if (s.error) {
+      card.classList.add('data-error');
+      const priceEl = document.getElementById('price-' + c.ticker);
+      const chgEl   = document.getElementById('chg-'   + c.ticker);
+      if (priceEl) priceEl.textContent = '—';
+      if (chgEl)   { chgEl.textContent = 'No data'; chgEl.className = 'price-change'; }
+      return;
+    }
+
+    card.classList.remove('data-error');
+    const isUp    = s.dayChangePct >= 0;
+    const priceEl = document.getElementById('price-'  + c.ticker);
+    const chgEl   = document.getElementById('chg-'    + c.ticker);
+    const sparkEl = document.getElementById('spark-'  + c.ticker);
+    const prevcEl = document.getElementById('prevc-'  + c.ticker);
+
+    if (priceEl) {
+      priceEl.textContent = '$' + s.price.toFixed(2);
+      if (flash) {
+        priceEl.classList.remove('flash-up', 'flash-down');
+        void priceEl.offsetWidth;
+        priceEl.classList.add(isUp ? 'flash-up' : 'flash-down');
+      }
+    }
+    if (chgEl) {
+      chgEl.textContent = (isUp?'+':'') + s.dayChange.toFixed(2) +
+        ' (' + (isUp?'+':'') + s.dayChangePct.toFixed(2) + '%)';
+      chgEl.className = 'price-change ' + (isUp ? 'up' : 'down');
+    }
+    if (sparkEl) sparkEl.innerHTML = buildSparkline(s.history, isUp);
+    if (prevcEl) prevcEl.textContent = '$' + s.prevClose.toFixed(2);
+  });
+}
+
+function setLastUpdated(text) {
+  const el = document.getElementById('last-updated');
+  if (el) el.textContent = text;
+}
+
+async function fetchAllData(range) {
+  const tickers = COMPANIES.map(function(c) { return c.ticker; }).join(',');
+  if (!realDataLoaded) setLastUpdated('Fetching live data…');
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(function() { controller.abort(); }, 60000);
+    const res = await fetch('/api/finance?tickers=' + tickers + '&range=' + range, {
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const isRefresh = realDataLoaded;
+    let updated = 0;
+
+    COMPANIES.forEach(function(c) {
+      const raw    = data[c.ticker];
+      const result = raw && raw.chart && raw.chart.result && raw.chart.result[0];
+      if (result) {
+        applyYFData(c.ticker, result, range);
+        updated++;
+      } else {
+        console.warn('[SemiTrack] No data for ' + c.ticker);
+        if (!realDataLoaded) state[c.ticker].error = true;
+      }
+    });
+
+    if (updated > 0) {
+      realDataLoaded = true;
+      updateLiveCards(isRefresh);
+      updateStats();
+      renderMovers();
+      buildSectorGrid();
+      buildReport();
+      updateFearGauge();
+      const { score } = calcFearIndex();
+      buildNewsSection(score);
+      buildFutureOutlook(score);
+    }
+
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const label = updated > 0
+      ? 'Yahoo Finance · ' + time
+      : 'Partial data · ' + time;
+    setLastUpdated(label);
+
+  } catch (err) {
+    console.error('[SemiTrack] Batch fetch failed:', err.message);
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    setLastUpdated('Data unavailable · ' + time);
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────
+async function init() {
+  initState();
+  buildCards();
+  updateStats();
+  renderMovers();
+  buildSectorGrid();
+  buildReport();
+  buildFearGaugeSVG();
+  updateFearGauge();
+  const { score } = calcFearIndex();
+  buildNewsSection(score);
+  buildFutureOutlook(score);
+  updateClock();
+
+  // Simulated drift runs until real data arrives
+  priceIntervalId = setInterval(updatePrices, 4000);
+  setInterval(updateClock, 1000);
+  setInterval(function() {
+    buildSectorGrid();
+    buildReport();
+    updateFearGauge();
+    const { score } = calcFearIndex();
+    buildNewsSection(score);
+    buildFutureOutlook(score);
+  }, 30000);
+
+  // Fetch 3-month history + current prices (gives sparklines + price data)
+  await fetchAllData('3mo');
+  // Follow-up 1d fetch corrects daily change % (3mo range can return skewed values)
+  await fetchAllData('1d');
+
+  if (realDataLoaded) {
+    // Stop simulated drift — real data is in charge
+    clearInterval(priceIntervalId);
+    priceIntervalId = null;
+
+    // Poll every 60 s during market hours (1d = small payload, current data only)
+    setInterval(async function() {
+      if (isMarketHours()) {
+        await fetchAllData('1d');
+      }
+    }, 60000);
+  }
+  // If fetch failed, simulation keeps running so the dashboard stays alive
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
