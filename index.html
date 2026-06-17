@@ -2061,6 +2061,9 @@ function updateClock() {
 
 // ── Yahoo Finance real data layer ──────────────────────────────
 
+const IS_LOCAL = window.location.hostname === 'localhost' ||
+                 window.location.hostname === '127.0.0.1';
+
 let realDataLoaded = false;
 let priceIntervalId = null;
 
@@ -2143,59 +2146,91 @@ function setLastUpdated(text) {
   if (el) el.textContent = text;
 }
 
-async function fetchAllData(range) {
-  const tickers = COMPANIES.map(function(c) { return c.ticker; }).join(',');
-  if (!realDataLoaded) setLastUpdated('Fetching live data…');
-
+// Single-ticker fetch used on GitHub Pages (browser-side, via CORS proxy)
+async function fetchOneTicker(ticker, range) {
+  const yfUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + ticker +
+                '?interval=1d&range=' + range + '&includePrePost=false';
+  const url = 'https://corsproxy.io/?' + encodeURIComponent(yfUrl);
   try {
     const controller = new AbortController();
-    const timer = setTimeout(function() { controller.abort(); }, 60000);
-    const res = await fetch('/api/finance?tickers=' + tickers + '&range=' + range, {
-      signal: controller.signal
-    });
+    const timer = setTimeout(function() { controller.abort(); }, 15000);
+    const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
-
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-
-    const isRefresh = realDataLoaded;
-    let updated = 0;
-
-    COMPANIES.forEach(function(c) {
-      const raw    = data[c.ticker];
-      const result = raw && raw.chart && raw.chart.result && raw.chart.result[0];
-      if (result) {
-        applyYFData(c.ticker, result, range);
-        updated++;
-      } else {
-        console.warn('[SemiTrack] No data for ' + c.ticker);
-        if (!realDataLoaded) state[c.ticker].error = true;
-      }
-    });
-
-    if (updated > 0) {
-      realDataLoaded = true;
-      updateLiveCards(isRefresh);
-      updateStats();
-      renderMovers();
-      buildSectorGrid();
-      buildReport();
-      updateFearGauge();
-      const { score } = calcFearIndex();
-      buildNewsSection(score);
-      buildFutureOutlook(score);
-    }
-
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const label = updated > 0
-      ? 'Yahoo Finance · ' + time
-      : 'Partial data · ' + time;
-    setLastUpdated(label);
-
+    return (data && data.chart && data.chart.result && data.chart.result[0]) || null;
   } catch (err) {
-    console.error('[SemiTrack] Batch fetch failed:', err.message);
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    setLastUpdated('Data unavailable · ' + time);
+    console.error('[SemiTrack] ' + ticker + ' (' + range + '):', err.message);
+    return null;
+  }
+}
+
+function applyBatchResults(resultPairs, range) {
+  const isRefresh = realDataLoaded;
+  let updated = 0;
+  resultPairs.forEach(function(pair) {
+    if (pair.result) {
+      applyYFData(pair.ticker, pair.result, range);
+      updated++;
+    } else {
+      console.warn('[SemiTrack] No data for ' + pair.ticker);
+      if (!realDataLoaded) state[pair.ticker].error = true;
+    }
+  });
+  if (updated > 0) {
+    realDataLoaded = true;
+    updateLiveCards(isRefresh);
+    updateStats();
+    renderMovers();
+    buildSectorGrid();
+    buildReport();
+    updateFearGauge();
+    const sc = calcFearIndex();
+    buildNewsSection(sc.score);
+    buildFutureOutlook(sc.score);
+  }
+  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  setLastUpdated(updated > 0 ? 'Yahoo Finance · ' + time : 'Data unavailable · ' + time);
+}
+
+async function fetchAllData(range) {
+  if (!realDataLoaded) setLastUpdated('Fetching live data…');
+
+  if (IS_LOCAL) {
+    // ── Local: single batch request via PowerShell proxy ─────
+    const tickers = COMPANIES.map(function(c) { return c.ticker; }).join(',');
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(function() { controller.abort(); }, 60000);
+      const res = await fetch('/api/finance?tickers=' + tickers + '&range=' + range, {
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      applyBatchResults(COMPANIES.map(function(c) {
+        const raw = data[c.ticker];
+        return {
+          ticker: c.ticker,
+          result: raw && raw.chart && raw.chart.result && raw.chart.result[0] || null
+        };
+      }), range);
+    } catch (err) {
+      console.error('[SemiTrack] Batch fetch failed:', err.message);
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      setLastUpdated('Data unavailable · ' + time);
+    }
+  } else {
+    // ── GitHub Pages: parallel per-ticker via corsproxy.io ───
+    const settled = await Promise.allSettled(
+      COMPANIES.map(function(c) { return fetchOneTicker(c.ticker, range); })
+    );
+    applyBatchResults(COMPANIES.map(function(c, i) {
+      return {
+        ticker: c.ticker,
+        result: settled[i].status === 'fulfilled' ? settled[i].value : null
+      };
+    }), range);
   }
 }
 
