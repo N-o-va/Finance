@@ -1,0 +1,44 @@
+# Fetches Yahoo Finance data for the Semi Tracker and publishes it as data.json on the
+# semi-data branch, which the hosted page reads from raw.githubusercontent.com.
+# Lives on main because scheduled workflows only run from the default branch.
+name: Semi Tracker data
+
+on:
+  schedule:
+    # Every 5 min, 13:00–21:55 UTC on weekdays: covers 9:30–16:00 ET in both EDT and EST
+    - cron: '*/5 13-21 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/semi-tracker-data.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semi-tracker-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Semiconductor-tracker
+
+      - name: Fetch data
+        run: python3 scripts/fetch_data.py index.html "$RUNNER_TEMP/data.json"
+
+      - name: Publish to semi-data branch
+        # Single force-pushed commit so the data branch never accumulates history
+        run: |
+          mkdir "$RUNNER_TEMP/out" && mv "$RUNNER_TEMP/data.json" "$RUNNER_TEMP/out/"
+          cd "$RUNNER_TEMP/out"
+          git init -q -b semi-data
+          git add data.json
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m 'Update Semi Tracker data'
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" semi-data
