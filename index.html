@@ -2146,26 +2146,10 @@ function setLastUpdated(text) {
   if (el) el.textContent = text;
 }
 
-// Single-ticker fetch used on GitHub Pages (browser-side, via CORS proxy)
-async function fetchOneTicker(ticker, range) {
-  const yfUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + ticker +
-                '?interval=1d&range=' + range + '&includePrePost=false';
-  const url = 'https://corsproxy.io/?' + encodeURIComponent(yfUrl);
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(function() { controller.abort(); }, 15000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    return (data && data.chart && data.chart.result && data.chart.result[0]) || null;
-  } catch (err) {
-    console.error('[SemiTrack] ' + ticker + ' (' + range + '):', err.message);
-    return null;
-  }
-}
+// Snapshot written by the scheduled GitHub Action (scripts/fetch_data.py) to the semi-data branch
+const SNAPSHOT_URL = 'https://raw.githubusercontent.com/N-o-va/Finance/semi-data/data.json';
 
-function applyBatchResults(resultPairs, range) {
+function applyBatchResults(resultPairs, range, asOf) {
   const isRefresh = realDataLoaded;
   let updated = 0;
   resultPairs.forEach(function(pair) {
@@ -2190,47 +2174,84 @@ function applyBatchResults(resultPairs, range) {
     buildFutureOutlook(sc.score);
   }
   const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  setLastUpdated(updated > 0 ? 'Yahoo Finance · ' + time : 'Data unavailable · ' + time);
+  if (updated === 0) setLastUpdated('Data unavailable · ' + time);
+  else if (asOf) setLastUpdated('Yahoo Finance · as of ' + new Date(asOf).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+  else setLastUpdated('Yahoo Finance · ' + time);
 }
 
+// GitHub Pages: one request for the whole snapshot (3mo history + 1d daily change per ticker)
+async function fetchSnapshot() {
+  if (!realDataLoaded) setLastUpdated('Fetching live data…');
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(function() { controller.abort(); }, 15000);
+    const res = await fetch(SNAPSHOT_URL + '?t=' + Date.now(), { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const snap = await res.json();
+    ['3mo', '1d'].forEach(function(range) {
+      applyBatchResults(COMPANIES.map(function(c) {
+        const t = snap.tickers[c.ticker];
+        return { ticker: c.ticker, result: (t && t[range]) || null };
+      }), range, snap.updated);
+    });
+  } catch (err) {
+    console.error('[SemiTrack] Snapshot fetch failed:', err.message);
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    setLastUpdated('Data unavailable · ' + time);
+  }
+}
+
+// Local: single batch request via PowerShell proxy
 async function fetchAllData(range) {
   if (!realDataLoaded) setLastUpdated('Fetching live data…');
-
-  if (IS_LOCAL) {
-    // ── Local: single batch request via PowerShell proxy ─────
-    const tickers = COMPANIES.map(function(c) { return c.ticker; }).join(',');
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(function() { controller.abort(); }, 60000);
-      const res = await fetch('/api/finance?tickers=' + tickers + '&range=' + range, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      applyBatchResults(COMPANIES.map(function(c) {
-        const raw = data[c.ticker];
-        return {
-          ticker: c.ticker,
-          result: raw && raw.chart && raw.chart.result && raw.chart.result[0] || null
-        };
-      }), range);
-    } catch (err) {
-      console.error('[SemiTrack] Batch fetch failed:', err.message);
-      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      setLastUpdated('Data unavailable · ' + time);
-    }
-  } else {
-    // ── GitHub Pages: parallel per-ticker via corsproxy.io ───
-    const settled = await Promise.allSettled(
-      COMPANIES.map(function(c) { return fetchOneTicker(c.ticker, range); })
-    );
-    applyBatchResults(COMPANIES.map(function(c, i) {
+  const tickers = COMPANIES.map(function(c) { return c.ticker; }).join(',');
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(function() { controller.abort(); }, 60000);
+    const res = await fetch('/api/finance?tickers=' + tickers + '&range=' + range, {
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    applyBatchResults(COMPANIES.map(function(c) {
+      const raw = data[c.ticker];
       return {
         ticker: c.ticker,
-        result: settled[i].status === 'fulfilled' ? settled[i].value : null
+        result: raw && raw.chart && raw.chart.result && raw.chart.result[0] || null
       };
     }), range);
+  } catch (err) {
+    console.error('[SemiTrack] Batch fetch failed:', err.message);
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    setLastUpdated('Data unavailable · ' + time);
+  }
+}
+
+let fetchInFlight = false;
+
+async function loadLiveData() {
+  if (fetchInFlight) return;
+  fetchInFlight = true;
+  try {
+    if (!IS_LOCAL) {
+      await fetchSnapshot();
+    } else if (!realDataLoaded) {
+      // Fetch 3-month history + current prices (gives sparklines + price data)
+      await fetchAllData('3mo');
+      // Follow-up 1d fetch corrects daily change % (3mo range can return skewed values)
+      await fetchAllData('1d');
+    } else {
+      await fetchAllData('1d');
+    }
+  } finally {
+    fetchInFlight = false;
+  }
+  if (realDataLoaded && priceIntervalId) {
+    // Stop simulated drift — real data is in charge
+    clearInterval(priceIntervalId);
+    priceIntervalId = null;
   }
 }
 
@@ -2261,24 +2282,12 @@ async function init() {
     buildFutureOutlook(score);
   }, 30000);
 
-  // Fetch 3-month history + current prices (gives sparklines + price data)
-  await fetchAllData('3mo');
-  // Follow-up 1d fetch corrects daily change % (3mo range can return skewed values)
-  await fetchAllData('1d');
+  await loadLiveData();
 
-  if (realDataLoaded) {
-    // Stop simulated drift — real data is in charge
-    clearInterval(priceIntervalId);
-    priceIntervalId = null;
-
-    // Poll every 60 s during market hours (1d = small payload, current data only)
-    setInterval(async function() {
-      if (isMarketHours()) {
-        await fetchAllData('1d');
-      }
-    }, 60000);
-  }
-  // If fetch failed, simulation keeps running so the dashboard stays alive
+  // Every 60 s: keep retrying until real data arrives, then refresh during market hours
+  setInterval(function() {
+    if (!realDataLoaded || isMarketHours()) loadLiveData();
+  }, 60000);
 }
 
 document.addEventListener('DOMContentLoaded', init);
